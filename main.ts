@@ -421,11 +421,13 @@ export default class Waypoint extends Plugin {
 						if (child instanceof TFile) {
 							name = child.extension == "md" ? child.basename : child.name;
 							if (this.settings.useFrontMatterTitle) {
-								if (f && f.hasOwnProperty("title")) alias = f.title;
+								if (f && f.hasOwnProperty("title")) name = f.title;
 							}
-							row += alias
-								? `|[[${name}\\|${alias}|]]`
-								: `|[[${name}]]`;
+							if (this.settings.useWikiLinks) {
+								row += `|[[${child.path}\\|${name}]]`;
+							} else {
+								row += `|[${name}](${child.path.replace(" ", "%20")})`;
+							}
 						} else if (child instanceof TFolder) {
 							let path: string;
 							if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
@@ -446,7 +448,7 @@ export default class Waypoint extends Plugin {
 							if (this.settings.useWikiLinks) {
 								row += `|[[${path}\\|${child.name}]]`;
 							} else {
-								row += `|[${child.name}](${path})`;
+								row += `|[${child.name}](${path.replace(" ", "%20")})`;
 							}
 						}
 						break;
