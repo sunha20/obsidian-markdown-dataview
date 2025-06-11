@@ -426,7 +426,7 @@ export default class Waypoint extends Plugin {
 							if (this.settings.useWikiLinks) {
 								row += `|[[${child.path}\\|${name}]]`;
 							} else {
-								row += `|[${name}](${child.path.replace(" ", "%20")})`;
+								row += `|[${name}](${child.path.replaceAll(" ", "%20")})`;
 							}
 						} else if (child instanceof TFolder) {
 							let path: string;
@@ -448,7 +448,7 @@ export default class Waypoint extends Plugin {
 							if (this.settings.useWikiLinks) {
 								row += `|[[${path}\\|${child.name}]]`;
 							} else {
-								row += `|[${child.name}](${path.replace(" ", "%20")})`;
+								row += `|[${child.name}](${path.replaceAll(" ", "%20")})`;
 							}
 						}
 						break;
