@@ -443,7 +443,11 @@ export default class Waypoint extends Plugin {
 							} else {
 								path = "";
 							}
-							row += `|[[${path}\\|${child.name}]]`;
+							if (this.settings.useWikiLinks) {
+								row += `|[[${path}\\|${child.name}]]`;
+							} else {
+								row += `|[${child.name}](${path})`;
+							}
 						}
 						break;
 
