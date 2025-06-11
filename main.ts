@@ -429,9 +429,17 @@ export default class Waypoint extends Plugin {
 						} else if (child instanceof TFolder) {
 							let path: string;
 							if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
-								path = child.path + "/" + child.name + ".md";
+								if (this.settings.folderNoteName == "") {
+									path = child.path + "/" + child.name + ".md";
+								} else {
+									path = child.path + "/" + this.settings.folderNoteName + ".md";
+								}
 							} else if (node.parent) {
-								path = child.parent.path + "/" + child.name + ".md";
+								if (this.settings.folderNoteName == "") {
+									path = child.path + "/" + child.name + ".md";
+								} else {
+									path = child.path + "/" + this.settings.folderNoteName + ".md";
+								}
 							} else {
 								path = "";
 							}
