@@ -296,70 +296,85 @@ export default class Waypoint extends Plugin {
 		this.log(node.path);
 		if (this.ignorePath(node.path)) return null;
 
-		// [변경] 파일일 경우 row로만 처리
-		if (node instanceof TFile) {
-			if (this.settings.debugLogging) {
-				console.log(node);
+		// // [변경] 파일일 경우 row로만 처리
+		// if (node instanceof TFile) {
+		// 	if (this.settings.debugLogging) {
+		// 		console.log(node);
+		// 	}
+		// 	let title: string | null = null;
+		// 	if (this.settings.useFrontMatterTitle) {
+		// 		const fm = this.app.metadataCache?.getFileCache(node)?.frontmatter;
+		// 		if (fm && fm.hasOwnProperty("title")) {
+		// 			title = fm.title;
+		// 		}
+		// 	}
+		//
+		// 	// [변경] Table row로 반환, wiki link 또는 markdown link 지원
+		// 	if (node.extension == "md") {
+		// 		if (this.settings.useWikiLinks) {
+		// 			return title
+		// 				? `|[[${node.basename}|${title}]]|`
+		// 				: `|[[${node.basename}]]|`;
+		// 		} else {
+		// 			return title
+		// 				? `|[${title}](${this.getEncodedUri(rootNode, node)})|`
+		// 				: `|[${node.basename}](${this.getEncodedUri(rootNode, node)})|`;
+		// 		}
+		// 	}
+		// 	// Non-markdown files
+		// 	if (this.settings.showNonMarkdownFiles) {
+		// 		if (this.settings.useWikiLinks) {
+		// 			return `|[[${node.name}]]|`;
+		// 		}
+		// 		return `|[${node.name}](${this.getEncodedUri(rootNode, node)})|`;
+		// 	}
+		// 	return null;
+		// }
+
+		// // [변경] 폴더 - 폴더 노트 경로 계산
+		// let folderNote: TFile | null = null;
+		// if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
+		// 	const note = this.app.vault.getAbstractFileByPath(
+		// 		node.path + "/" + node.name + ".md"
+		// 	);
+		// 	folderNote = note instanceof TFile ? note : null;
+		// } else if (node.parent) {
+		// 	const note = this.app.vault.getAbstractFileByPath(
+		// 		node.parent.path + "/" + node.name + ".md"
+		// 	);
+		// 	folderNote = note instanceof TFile ? note : null;
+		// }
+
+		// [변경] 자식 요소 처리(정렬/필터)
+		let children = node.children ? [...node.children] : [];
+		children = children.sort((a, b) => {
+			// 기본: 생성일(ctime) 기준 내림차순, 없으면 이름순
+			if (!a.stat?.ctime) return -1;
+			if (!b.stat?.ctime) return 1;
+			return new Date(b.stat.ctime).getTime() - new Date(a.stat.ctime).getTime();
+		});
+
+		// 폴더노트 숨김/필터링
+		const filtered: TAbstractFile[] = [];
+		let folderNote:TFile;
+		for (const child of children) {
+			// TFile이면서 폴더노트라면 건너뛰고, 아니면 배열에 추가
+			if (this.ignorePath(child.path)) {
+				continue
 			}
-			let title: string | null = null;
-			if (this.settings.useFrontMatterTitle) {
-				const fm = this.app.metadataCache?.getFileCache(node)?.frontmatter;
-				if (fm && fm.hasOwnProperty("title")) {
-					title = fm.title;
+
+			if (child instanceof TFile && this.isFolderNote(child)) {
+				folderNote = child
+				if (!this.settings.showFolderNotes) {
+					continue
 				}
 			}
 
-			// [변경] Table row로 반환, wiki link 또는 markdown link 지원
-			if (node.extension == "md") {
-				if (this.settings.useWikiLinks) {
-					return title
-						? `|[[${node.basename}|${title}]]|`
-						: `|[[${node.basename}]]|`;
-				} else {
-					return title
-						? `|[${title}](${this.getEncodedUri(rootNode, node)})|`
-						: `|[${node.basename}](${this.getEncodedUri(rootNode, node)})|`;
-				}
-			}
-			// Non-markdown files
-			if (this.settings.showNonMarkdownFiles) {
-				if (this.settings.useWikiLinks) {
-					return `|[[${node.name}]]|`;
-				}
-				return `|[${node.name}](${this.getEncodedUri(rootNode, node)})|`;
-			}
-			return null;
+			filtered.push(child);
 		}
+		children = filtered;
 
-		// [변경] 폴더 - 폴더 노트 경로 계산
-		let folderNote: TFile | null = null;
-		if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
-			const note = this.app.vault.getAbstractFileByPath(
-				node.path + "/" + node.name + ".md"
-			);
-			folderNote = note instanceof TFile ? note : null;
-		} else if (node.parent) {
-			const note = this.app.vault.getAbstractFileByPath(
-				node.parent.path + "/" + node.name + ".md"
-			);
-			folderNote = note instanceof TFile ? note : null;
-		}
-
-		// [변경] Table header와 New file/folder 버튼 등 추가
-		let out = `## ${node.name}\n`;
-
-		// [변경] 폴더 노트 wiki 링크/마크다운 링크 표시
-		if (folderNote) {
-			if (this.settings.useWikiLinks) {
-				out = `### [[${folderNote.basename}]]`;
-			} else {
-				out = `### [${folderNote.basename}](${this.getEncodedUri(
-					rootNode,
-					folderNote
-				)})`;
-			}
-		}
-
+		let out = `# ${rootNode.name}`
 		// [변경] 폴더 내 new file/new folder 버튼
 		if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
 			out +=
@@ -386,24 +401,6 @@ export default class Waypoint extends Plugin {
 		}
 
 		out += "\n|" + keyList.join("|") + "|\n|" + dash.join("|") + "|\n";
-
-		// [변경] 자식 요소 처리(정렬/필터)
-		let children = node.children ? [...node.children] : [];
-		children = children.sort((a, b) => {
-			// 기본: 생성일(ctime) 기준 내림차순, 없으면 이름순
-			if (!a.stat?.ctime) return -1;
-			if (!b.stat?.ctime) return 1;
-			return new Date(b.stat.ctime).getTime() - new Date(a.stat.ctime).getTime();
-		});
-
-		// 폴더노트 숨김/필터링
-		if (!this.settings.showFolderNotes) {
-			children = children.filter(child =>
-				// TFile이면서 폴더노트인 경우만 제거 (isFolderNote가 true면 제거)
-				!(child instanceof TFile && this.isFolderNote(child)) &&
-				!this.ignorePath(child.path)
-			);
-		}
 
 		// [변경] 각 자식 노드를 Table Row로 추가 (재귀 x)
 		for (const child of children) {
