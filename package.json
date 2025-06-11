@@ -1,7 +1,7 @@
 {
-	"name": "waypoint",
-	"version": "2.1.0",
-	"description": "Easily generate dynamic content maps in your folder notes using waypoints. Enables folders to show up in the graph view and removes the need for messy tags!",
+	"name": "markdown-dataview",
+	"version": "1.0.0",
+	"description": "Easily generate markdown index note in your folder notes.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
