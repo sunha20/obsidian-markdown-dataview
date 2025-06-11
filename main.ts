@@ -398,26 +398,11 @@ export default class Waypoint extends Plugin {
 
 		// 폴더노트 숨김/필터링
 		if (!this.settings.showFolderNotes) {
-			if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
-				children = children.filter(
-					(child) =>
-						(this.settings.showFolderNotes ||
-							child.name !== node.name + ".md") &&
-						!this.ignorePath(child.path)
-				);
-			} else {
-				const folderNames = new Set<string>();
-				for (const element of children) {
-					if (element instanceof TFolder) {
-						folderNames.add(element.name + ".md");
-					}
-				}
-				children = children.filter(
-					(child) =>
-						(child instanceof TFolder || !folderNames.has(child.name)) &&
-						!this.ignorePath(child.path)
-				);
-			}
+			children = children.filter(child =>
+				// TFile이면서 폴더노트인 경우만 제거 (isFolderNote가 true면 제거)
+				!(child instanceof TFile && this.isFolderNote(child)) &&
+				!this.ignorePath(child.path)
+			);
 		}
 
 		// [변경] 각 자식 노드를 Table Row로 추가 (재귀 x)
