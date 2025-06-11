@@ -1,8 +1,20 @@
-import { App, debounce, normalizePath, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder, TextComponent, ToggleComponent } from "obsidian";
+import {
+	App,
+	debounce,
+	normalizePath,
+	Plugin,
+	PluginSettingTab,
+	Setting,
+	TAbstractFile,
+	TFile,
+	TFolder,
+	TextComponent,
+	ToggleComponent
+} from "obsidian";
 
 enum FolderNoteType {
 	InsideFolder = "INSIDE_FOLDER",
-	OutsideFolder = "OUTSIDE_FOLDER",
+	// OutsideFolder = "OUTSIDE_FOLDER",
 }
 
 enum WaypointType {
@@ -21,6 +33,7 @@ interface WaypointSettings {
 	useFrontMatterTitle: boolean;
 	showEnclosingNote: boolean;
 	folderNoteType: string;
+	folderNoteName: string;
 	ignorePaths: string[];
 	useSpaces: boolean;
 	numSpaces: number;
@@ -37,9 +50,10 @@ const DEFAULT_SETTINGS: WaypointSettings = {
 	useFrontMatterTitle: false,
 	showEnclosingNote: false,
 	folderNoteType: FolderNoteType.InsideFolder,
+	folderNoteName: "",
 	ignorePaths: ["_attachments"],
 	useSpaces: false,
-	numSpaces: 2,
+	numSpaces: 2
 };
 
 export default class Waypoint extends Plugin {
@@ -60,7 +74,7 @@ export default class Waypoint extends Plugin {
 				const curFile = this.app.workspace.getActiveFile();
 				const [, parentPoint] = await this.locateParentPoint(curFile, false);
 				this.app.workspace.activeLeaf.openFile(parentPoint);
-			},
+			}
 		});
 		this.app.workspace.onLayoutReady(async () => {
 			// Register events after layout is built to avoid initial wave of 'create' events
@@ -99,7 +113,8 @@ export default class Waypoint extends Plugin {
 		this.addSettingTab(new WaypointSettingsTab(this.app, this));
 	}
 
-	onunload() {}
+	onunload() {
+	}
 
 	detectFlags = async (file: TFile) => {
 		this.detectFlag(file, WaypointType.Waypoint);
@@ -139,7 +154,11 @@ export default class Waypoint extends Plugin {
 
 	isFolderNote(file: TFile): boolean {
 		if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
-			return file.basename == file.parent.name;
+			if (this.settings.folderNoteName == "") {
+				return file.basename == file.parent.name;
+			} else {
+				return file.basename == this.settings.folderNoteName;
+			}
 		}
 		if (file.parent) {
 			return this.app.vault.getAbstractFileByPath(this.getCleanParentPath(file) + file.basename) instanceof TFolder;
@@ -263,118 +282,264 @@ export default class Waypoint extends Plugin {
 	}
 
 	/**
-	 * Generate a file tree representation of the given folder.
+	 * Generate a file tree representation as a Markdown table of the given folder.
 	 * @param rootNode The root of the file tree that will be generated
 	 * @param node The current node in our recursive descent
-	 * @param indentLevel How many levels of indentation to draw
+	 * @param indentLevel How many levels of indentation to draw (used internally)
 	 * @param topLevel Whether this is the top level of the tree or not
 	 * @returns The string representation of the tree, or null if the node is not a file or folder
 	 */
-	async getFileTreeRepresentation(rootNode: TFolder, node: TAbstractFile, indentLevel: number, topLevel = false): Promise<string> | null {
-		const indent = this.settings.useSpaces ? " ".repeat(this.settings.numSpaces) : "	";
-		const bullet = indent.repeat(indentLevel) + "-";
-		if (!(node instanceof TFile) && !(node instanceof TFolder)) {
-			return null;
-		}
+	async getFileTreeRepresentation(rootNode: TFolder, node: TAbstractFile,	indentLevel: number, topLevel = false): Promise<string | null> {
+		// [변경] indent 및 bullet(트리용)은 사용하지 않음
+		if (!(node instanceof TFile) && !(node instanceof TFolder)) return null;
+
 		this.log(node.path);
-		if (this.ignorePath(node.path)) {
-			return null;
-		}
+		if (this.ignorePath(node.path)) return null;
+
+		// [변경] 파일일 경우 row로만 처리
 		if (node instanceof TFile) {
 			if (this.settings.debugLogging) {
 				console.log(node);
 			}
-			// If non-null get the file's title property
-			let title : string | null;
+			let title: string | null = null;
 			if (this.settings.useFrontMatterTitle) {
 				const fm = this.app.metadataCache?.getFileCache(node)?.frontmatter;
-				// check if the file has a "title" property and if so return it
-				if (fm && fm.hasOwnProperty("title")){
-					title =  fm.title;
+				if (fm && fm.hasOwnProperty("title")) {
+					title = fm.title;
 				}
-			} else {
-				title = null;
 			}
-			// Print the file name
+
+			// [변경] Table row로 반환, wiki link 또는 markdown link 지원
 			if (node.extension == "md") {
 				if (this.settings.useWikiLinks) {
-					if (title) {
-						return `${bullet} [[${node.basename}|${title}]]`;
-					} else {
-					return `${bullet} [[${node.basename}]]`;
-					}
-				}
-				if (title) {
-					return `${bullet} [${title}](${this.getEncodedUri(rootNode, node)})`;
+					return title
+						? `|[[${node.basename}|${title}]]|`
+						: `|[[${node.basename}]]|`;
 				} else {
-					return `${bullet} [${node.basename}](${this.getEncodedUri(rootNode, node)})`;
+					return title
+						? `|[${title}](${this.getEncodedUri(rootNode, node)})|`
+						: `|[${node.basename}](${this.getEncodedUri(rootNode, node)})|`;
 				}
 			}
+			// Non-markdown files
 			if (this.settings.showNonMarkdownFiles) {
 				if (this.settings.useWikiLinks) {
-					return `${bullet} [[${node.name}]]`;
+					return `|[[${node.name}]]|`;
 				}
-				return `${bullet} [${node.name}](${this.getEncodedUri(rootNode, node)})`;
+				return `|[${node.name}](${this.getEncodedUri(rootNode, node)})|`;
 			}
 			return null;
 		}
-		let text = "";
-		if (!topLevel || this.settings.showEnclosingNote) {
-			// Print the folder name
-			text = `${bullet} **${node.name}**`;
-			let folderNote;
-			if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
-				folderNote = this.app.vault.getAbstractFileByPath(node.path + "/" + node.name + ".md");
-			} else if (node.parent) {
-				folderNote = this.app.vault.getAbstractFileByPath(node.parent.path + "/" + node.name + ".md");
-			}
-			if (folderNote instanceof TFile) {
-				if (this.settings.useWikiLinks) {
-					text = `${bullet} **[[${folderNote.basename}]]**`;
-				} else {
-					text = `${bullet} **[${folderNote.basename}](${this.getEncodedUri(rootNode, folderNote)})**`;
-				}
-				if (!topLevel) {
-					if (this.settings.stopScanAtFolderNotes) {
-						return text;
-					}
-					const content = await this.app.vault.cachedRead(folderNote);
-					if (content.includes(Waypoint.BEGIN_WAYPOINT) || content.includes(this.settings.waypointFlag)) {
-						return text;
-					}
-				}
+
+		// [변경] 폴더 - 폴더 노트 경로 계산
+		let folderNote: TFile | null = null;
+		if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
+			const note = this.app.vault.getAbstractFileByPath(
+				node.path + "/" + node.name + ".md"
+			);
+			folderNote = note instanceof TFile ? note : null;
+		} else if (node.parent) {
+			const note = this.app.vault.getAbstractFileByPath(
+				node.parent.path + "/" + node.name + ".md"
+			);
+			folderNote = note instanceof TFile ? note : null;
+		}
+
+		// [변경] Table header와 New file/folder 버튼 등 추가
+		let out = `## ${node.name}\n`;
+
+		// [변경] 폴더 노트 wiki 링크/마크다운 링크 표시
+		if (folderNote) {
+			if (this.settings.useWikiLinks) {
+				out = `### [[${folderNote.basename}]]`;
+			} else {
+				out = `### [${folderNote.basename}](${this.getEncodedUri(
+					rootNode,
+					folderNote
+				)})`;
 			}
 		}
-		if (!node.children || node.children.length == 0) {
-			return `${bullet} **${node.name}**`;
+
+		// [변경] 폴더 내 new file/new folder 버튼
+		if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
+			out +=
+				`\n[[${node.path}/new file.md\\|new file]] | [[${node.path}/new folder/new folder.md\\|new folder]]\n`;
+		} else if (node.parent) {
+			out +=
+				`\n[[${node.path}/new file.md\\|new file]]\n`;
 		}
-		// Print the files and nested folders within the folder
-		let children = node.children;
+
+		// [변경] Table head: frontmatter keys 추출 (동적 column)
+		const frontmatter =
+			this.app.metadataCache?.getFileCache(folderNote ?? node as TFile)?.frontmatter;
+		let keyList = ["TITLE", "DATE"];
+		let dash = ["---", "---"];
+		if (
+			frontmatter != null &&
+			frontmatter.hasOwnProperty("keys") &&
+			Array.isArray(frontmatter.keys)
+		) {
+			for (const key of frontmatter.keys) {
+				keyList.push(key);
+				dash.push("---");
+			}
+		}
+
+		out += "\n|" + keyList.join("|") + "|\n|" + dash.join("|") + "|\n";
+
+		// [변경] 자식 요소 처리(정렬/필터)
+		let children = node.children ? [...node.children] : [];
 		children = children.sort((a, b) => {
-			return a.name.localeCompare(b.name, undefined, {
-				numeric: true,
-				sensitivity: "base",
-			});
+			// 기본: 생성일(ctime) 기준 내림차순, 없으면 이름순
+			if (!a.stat?.ctime) return -1;
+			if (!b.stat?.ctime) return 1;
+			return new Date(b.stat.ctime).getTime() - new Date(a.stat.ctime).getTime();
 		});
+
+		// 폴더노트 숨김/필터링
 		if (!this.settings.showFolderNotes) {
 			if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
-				children = children.filter((child) => (this.settings.showFolderNotes || child.name !== node.name + ".md") && !this.ignorePath(child.path));
+				children = children.filter(
+					(child) =>
+						(this.settings.showFolderNotes ||
+							child.name !== node.name + ".md") &&
+						!this.ignorePath(child.path)
+				);
 			} else {
-				const folderNames = new Set();
+				const folderNames = new Set<string>();
 				for (const element of children) {
 					if (element instanceof TFolder) {
 						folderNames.add(element.name + ".md");
 					}
 				}
-				children = children.filter((child) => (child instanceof TFolder || !folderNames.has(child.name)) && !this.ignorePath(child.path));
+				children = children.filter(
+					(child) =>
+						(child instanceof TFolder || !folderNames.has(child.name)) &&
+						!this.ignorePath(child.path)
+				);
 			}
 		}
-		if (children.length > 0) {
-			const nextIndentLevel = topLevel && !this.settings.showEnclosingNote ? indentLevel : indentLevel + 1;
-			text += (text === "" ? "" : "\n") + (await Promise.all(children.map((child) => this.getFileTreeRepresentation(rootNode, child, nextIndentLevel)))).filter(Boolean).join("\n");
+
+		// [변경] 각 자식 노드를 Table Row로 추가 (재귀 x)
+		for (const child of children) {
+			let row = "";
+			let name: string = "";
+			let alias: string | null = null;
+			let ctime: number | string | undefined;
+			let f =
+				child instanceof TFile
+					? this.app.metadataCache?.getFileCache(child)?.frontmatter
+					: undefined;
+
+			for (const key of keyList) {
+				switch (key) {
+					case "TITLE":
+					case "Title":
+					case "title":
+						if (child instanceof TFile) {
+							name = child.extension == "md" ? child.basename : child.name;
+							if (this.settings.useFrontMatterTitle) {
+								if (f && f.hasOwnProperty("title")) alias = f.title;
+							}
+							row += alias
+								? `|[[${name}\\|${alias}|]]`
+								: `|[[${name}]]`;
+						} else if (child instanceof TFolder) {
+							let path: string;
+							if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
+								path = child.path + "/" + child.name + ".md";
+							} else if (node.parent) {
+								path = child.parent.path + "/" + child.name + ".md";
+							} else {
+								path = "";
+							}
+							row += `|[[${path}\\|${child.name}]]`;
+						}
+						break;
+
+					case "DATE":
+					case "Date":
+					case "date":
+						if (child instanceof TFile) {
+							if (f?.DATE) ctime = f.DATE;
+							else if (f?.Date) ctime = f.Date;
+							else if (f?.date) ctime = f.date;
+							else ctime = child.stat?.ctime;
+							let date = new Date(ctime ?? "");
+							row += `|${date.getFullYear()}-${this.addZero(
+								date.getMonth() + 1
+							)}-${this.addZero(date.getDate())} (${this.convertDay(date.getDay())})`;
+						} else {
+							row += "|";
+						}
+						break;
+
+					case "tags":
+						if (f && f.hasOwnProperty(key)) {
+							let val = f[key];
+							if (Array.isArray(val)) val = val.join(" ");
+							row += `|${val}`;
+						} else row += "|";
+						break;
+
+					default:
+						if (f && f.hasOwnProperty(key)) {
+							let val = f[key];
+							// array인 경우
+							if (Array.isArray(val)) {
+								val = val.map((v: string) => this.convertLink(v, key)).join(", ");
+							} else {
+								val = this.convertLink(val, key);
+							}
+							if (val === null) val = "";
+							if (val === undefined) val = "b";
+							row += `|${val}`;
+						} else {
+							row += "|";
+						}
+						break;
+				}
+			}
+			row += "|\n";
+			out += row;
 		}
-		return text;
+
+		return out;
 	}
+	convertDay(dt: number): string {
+		switch (dt) {
+			case 0: return "일";
+			case 1: return "월";
+			case 2: return "화";
+			case 3: return "수";
+			case 4: return "목";
+			case 5: return "금";
+			case 6: return "토";
+			default: return ""; // 예외 처리
+		}
+	}
+
+	addZero(dt: number): string {
+		const dtStr = dt.toString();
+		if (dtStr.length === 1) {
+			return "0" + dtStr;
+		} else {
+			return dtStr;
+		}
+	}
+
+	convertLink(v: any, k: string): string {
+		if (typeof v === "string" && v.length > 12) {
+			if (v === "[[") return "";
+			if (v === null) return "";
+			if (v.startsWith("[[")) return v.replace("]]", `\\|${k}]]`);
+			if (v.startsWith("https://") || v.startsWith("http://")) return `[${k}](${v})`;
+			return v;
+		}
+		return String(v); // 숫자, null 등도 string으로 반환
+	}
+
+
 
 	/**
 	 * Generate an encoded URI path to the given file that is relative to the given root.
@@ -517,14 +682,25 @@ class WaypointSettingsTab extends PluginSettingTab {
 		containerEl.createEl("h2", { text: "Waypoint Settings" });
 		new Setting(this.containerEl)
 			.setName("Folder Note Style")
-			.setDesc("Select the style of folder note used.")
+			.setDesc("Select the style of folder global used.")
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption(FolderNoteType.InsideFolder, "Folder Name Inside")
-					.addOption(FolderNoteType.OutsideFolder, "Folder Name Outside")
+					// .addOption(FolderNoteType.OutsideFolder, "Folder Name Outside")
 					.setValue(this.plugin.settings.folderNoteType)
 					.onChange(async (value) => {
 						this.plugin.settings.folderNoteType = value;
+						await this.plugin.saveSettings();
+					})
+			);
+		new Setting(containerEl)
+			.setName("Folder Note Name")
+			.setDesc("If you use custom folder note name. Write that name.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.folderNoteName)
+					.onChange(async (value) => {
+						this.plugin.settings.folderNoteName = value;
 						await this.plugin.saveSettings();
 					})
 			);
@@ -668,24 +844,24 @@ class WaypointSettingsTab extends PluginSettingTab {
 					})
 			);
 		const postscriptElement = containerEl.createEl("div", {
-			cls: "setting-item",
+			cls: "setting-item"
 		});
 		const descriptionElement = postscriptElement.createDiv({
-			cls: "setting-item-description",
+			cls: "setting-item-description"
 		});
 		descriptionElement.createSpan({
-			text: "For instructions on how to use this plugin, check out the README on ",
+			text: "For instructions on how to use this plugin, check out the README on "
 		});
 		descriptionElement.createEl("a", {
 			attr: { href: "https://github.com/IdreesInc/Waypoint" },
-			text: "GitHub",
+			text: "GitHub"
 		});
 		descriptionElement.createSpan({
-			text: " or get in touch with the author ",
+			text: " or get in touch with the author "
 		});
 		descriptionElement.createEl("a", {
 			attr: { href: "https://github.com/IdreesInc" },
-			text: "@IdreesInc",
+			text: "@IdreesInc"
 		});
 		postscriptElement.appendChild(descriptionElement);
 	}
