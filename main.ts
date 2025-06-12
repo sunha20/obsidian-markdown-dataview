@@ -377,8 +377,13 @@ export default class Waypoint extends Plugin {
 		let out = `# ${rootNode.name}`
 		// [변경] 폴더 내 new file/new folder 버튼
 		if (this.settings.folderNoteType === FolderNoteType.InsideFolder) {
-			out +=
-				`\n[[${node.path}/new file.md\\|new file]] | [[${node.path}/new folder/new folder.md\\|new folder]]\n`;
+			if (this.settings.useWikiLinks) {
+				out +=
+					`\n[[${node.path}/new file.md\\|new file]] | [[${node.path}/new folder/new folder.md\\|new folder]]\n`;
+			} else {
+				out += `\n[new file](${node.path}/new file.md) | [new folder](${node.path}/new folder/README.md)\n`;
+
+			}
 		} else if (node.parent) {
 			out +=
 				`\n[[${node.path}/new file.md\\|new file]]\n`;
