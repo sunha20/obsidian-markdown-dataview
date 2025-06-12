@@ -381,7 +381,7 @@ export default class Waypoint extends Plugin {
 				out +=
 					`\n[[${node.path}/new file.md\\|new file]] | [[${node.path}/new folder/new folder.md\\|new folder]]\n`;
 			} else {
-				out += `\n[new file](${node.path}/new file.md) | [new folder](${node.path}/new folder/README.md)\n`;
+				out += `\n[new file](${node.path}/new file.md) | [new folder](${node.path}/new folder/README.md)\n`.replaceAll(" ", "%20");
 
 			}
 		} else if (node.parent) {
