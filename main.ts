@@ -381,7 +381,9 @@ export default class Waypoint extends Plugin {
 				out +=
 					`\n[[${node.path}/new file.md\\|new file]] | [[${node.path}/new folder/new folder.md\\|new folder]]\n`;
 			} else {
-				out += `\n[new file](${node.path}/new file.md) | [new folder](${node.path}/new folder/README.md)\n`.replaceAll(" ", "%20");
+				const newFile = `${node.path}/new file.md`
+				const newFolder = `${node.path}/new folder/README.md`
+				out += `\n[new file](${newFile.replaceAll(" ", "%20")}) | [new folder](${newFolder.replaceAll(" ", "%20")})\n`;
 
 			}
 		} else if (node.parent) {
