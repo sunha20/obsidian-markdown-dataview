@@ -1,6 +1,6 @@
 {
 	"name": "markdown-dataview",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Easily generate markdown index note in your folder notes.",
 	"main": "main.js",
 	"scripts": {
